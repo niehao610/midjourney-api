@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 from pydantic import BaseModel
 
@@ -58,8 +58,7 @@ class UploadResponse(BaseModel):
     upload_filename: str = ""
     upload_url: str = ""
     trigger_id: str
-
-
+    
 class SendMessageIn(BaseModel):
     upload_filename: str
 
@@ -67,3 +66,13 @@ class SendMessageIn(BaseModel):
 class SendMessageResponse(BaseModel):
     message: str = "success"
     picurl: str
+
+
+class MidjourneyResultIn(BaseModel):
+    """接收任意JSON数据的模型"""
+    data: Any
+
+
+class SimpleResponse(BaseModel):
+    """简单的成功响应模型"""
+    message: str = "success"

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile
+from loguru import logger
 
 from lib.api import discord
 from lib.api.discord import TriggerType
@@ -16,6 +17,8 @@ from .schema import (
     TriggerDescribeIn,
     SendMessageResponse,
     SendMessageIn,
+    MidjourneyResultIn,
+    SimpleResponse,
 )
 
 router = APIRouter()
@@ -92,6 +95,14 @@ async def send_message(body: SendMessageIn):
         return {"message": "Failed to send message"}
 
     return {"picurl": picurl}
+
+
+@router.post("/midjourney/result", response_model=SimpleResponse)
+async def midjourney_result(body: MidjourneyResultIn):
+    """接收Midjourney结果数据并打印JSON内容"""
+    logger.info(f"收到Midjourney结果数据: {body.json()}")
+    print(f"Midjourney Result JSON: {body.json()}")
+    return {"message": "success"}
 
 
 @router.post("/queue/release", response_model=TriggerResponse)
