@@ -69,8 +69,13 @@ class SendMessageResponse(BaseModel):
 
 
 class MidjourneyResultIn(BaseModel):
-    """接收任意JSON数据的模型"""
-    data: Any
+    """接收Midjourney结果数据的模型"""
+    type: str
+    id: int
+    content: str
+    attachments: list
+    embeds: list
+    trigger_id: str
 
 
 class SimpleResponse(BaseModel):

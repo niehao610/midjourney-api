@@ -102,7 +102,7 @@ async def midjourney_result(body: MidjourneyResultIn):
     """接收Midjourney结果数据并打印JSON内容"""
     logger.info(f"收到Midjourney结果数据: {body.json()}")
     print(f"Midjourney Result JSON: {body.json()}")
-    return {"ok": True}
+    return {"message": "success"}
 
 
 @router.post("/queue/release", response_model=TriggerResponse)
