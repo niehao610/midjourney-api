@@ -49,9 +49,12 @@ class TaskQueue:
             self._exec()
 
     def pop(self, _trigger_id: str) -> None:
-        self._concur_queue.remove(_trigger_id)
-        if self._wait_queue:
-            self._exec()
+        try:
+            self._concur_queue.remove(_trigger_id)
+            if self._wait_queue:
+                self._exec()
+        except ValueError:
+            pass
 
     def _exec(self):
         key, task = self._wait_queue.popleft().popitem()
