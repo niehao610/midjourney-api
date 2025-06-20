@@ -3,6 +3,7 @@ from loguru import logger
 
 from lib.api import discord
 from lib.api.discord import TriggerType
+from lib.db_operations import db_ops
 from util._queue import taskqueue
 from .handler import prompt_handler, unique_id
 from .schema import (
@@ -29,8 +30,22 @@ async def imagine(body: TriggerImagineIn):
     trigger_id, prompt = prompt_handler(body.prompt, body.picurl)
     trigger_type = TriggerType.generate.value
 
+    
+    # 创建数据库任务记录
+    try:
+        await db_ops.create_task(
+            task_name=body.prompt[:50],  # 截取前50个字符作为任务名
+            prompt=body.prompt,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url=body.picurl,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.generate, prompt)
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": trigger_id}
 
 
 @router.post("/upscale", response_model=TriggerResponse)
@@ -99,9 +114,57 @@ async def send_message(body: SendMessageIn):
 
 @router.post("/midjourney/result", response_model=SimpleResponse)
 async def midjourney_result(body: MidjourneyResultIn):
-    """接收Midjourney结果数据并打印JSON内容"""
+    """接收Midjourney结果数据并打印JSON内容	{
+	    "type": "end",
+	    "id": 1384952701758083308,
+	    "content": "**<#3935532608#>Editorial fashion photography, a chic woman in a stylish cobalt blue trench coat is walking confidently towards the camera on a sunlit city street. In the background is the gleaming facade of a luxury jewelry boutique. Floating majestically in the sky above her is a colossal, translucent whale made of shimmering crystal and liquid light, sparkling brilliantly. The atmosphere is bright, ethereal, and dreamlike. Shot on a Canon EOS R5 with a 50mm f/1.2 lens, shallow depth of field, hyper-realistic, 8K, UHD. --ar 9:16 --v 7.0** - <@839907989619212348> (fast)\n-# Create, explore, and organize on [midjourney.com](<https://midjourney.com/imagine?from_discord=1>)",
+	    "attachments": [
+	        {
+	            "filename": "forrynie.1981_3935532608Editorial_fashion_photography_a_chic_wo_d0966d3a-a86f-414d-8a67-be65951ef751.png",
+	            "id": 1384952701284122765,
+	            "proxy_url": "https://media.discordapp.net/attachments/1384158875657175166/1384952701284122765/forrynie.1981_3935532608Editorial_fashion_photography_a_chic_wo_d0966d3a-a86f-414d-8a67-be65951ef751.png?ex=68544d37&is=6852fbb7&hm=82195efc9fa6afc747673bc813d5b36f12f8c926fe94dd594e29a028c2077802&",
+	            "size": 7556893,
+	            "url": "https://cdn.discordapp.com/attachments/1384158875657175166/1384952701284122765/forrynie.1981_3935532608Editorial_fashion_photography_a_chic_wo_d0966d3a-a86f-414d-8a67-be65951ef751.png?ex=68544d37&is=6852fbb7&hm=82195efc9fa6afc747673bc813d5b36f12f8c926fe94dd594e29a028c2077802&",
+	            "spoiler": false,
+	            "height": 2912,
+	            "width": 1632,
+	            "content_type": "image/png"
+	        }
+	    ],
+	    "embeds": [],
+	    "trigger_id": "3935532608"
+	}
+   """
+    
     logger.info(f"收到Midjourney结果数据: {body.json()}")
     print(f"Midjourney Result JSON: {body.json()}")
+    
+    # 更新数据库任务状态和结果
+    try:
+        if body.trigger_id:
+            # 提取结果URL
+            result_url = None
+            msg_hash = ''
+            if body.attachments and len(body.attachments) > 0:
+                result_url = body.attachments[0].get("url")
+                msg_hash = body.attachments[0].filename.split("_")[-1].split(".")[0]
+            
+            # 确定任务状态
+            task_status = "SUCCESS" if body.type == "end" else "IN_PROGRESS"
+            
+            # 更新任务结果
+            await db_ops.update_task_result(
+                trigger_id=body.trigger_id,
+                task_status=task_status,
+                result_url=result_url,
+                attachments=body.attachments,
+                msg_id=body.id, 
+                msg_hash=msg_hash  # 如果有消息hash，可以从其他地方获取
+            )
+            logger.info(f"任务结果更新成功: {body.trigger_id}")
+    except Exception as e:
+        logger.error(f"更新任务结果失败: {e}")
+    
     return {"message": "success"}
 
 
@@ -158,4 +221,36 @@ async def zoomout(body: TriggerZoomOutIn):
 
     # 返回结果
     return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+
+
+@router.get("/task/{trigger_id}")
+async def get_task(trigger_id: str):
+    """根据trigger_id查询任务详情"""
+    try:
+        task = await db_ops.get_task_by_trigger_id(trigger_id)
+        if task:
+            if task["task_status"] == "SUCCESS":
+                return {"status": "SUCCESS", "imageUrl": task["result_url"]}
+            else:
+                return {"status":task["task_status"], "message": "任务未完成"}
+        else:
+            return {"status": "FAILURE", "message": "任务不存在"}
+    except Exception as e:
+        logger.error(f"查询任务失败: {e}")
+        return {"status": "FAILURE"}
+
+
+@router.get("/tasks")
+async def get_tasks(status: str = None, limit: int = 100, offset: int = 0):
+    """查询任务列表"""
+    try:
+        if status:
+            tasks = await db_ops.get_tasks_by_status(status, limit)
+        else:
+            tasks = await db_ops.get_all_tasks(limit, offset)
+        
+        return {"success": True, "data": tasks, "total": len(tasks)}
+    except Exception as e:
+        logger.error(f"查询任务列表失败: {e}")
+        return {"success": False, "message": "查询失败"}
 

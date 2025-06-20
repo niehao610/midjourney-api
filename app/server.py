@@ -4,6 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from exceptions import APPBaseException, ErrorCode
+from lib.database import connect_db, disconnect_db, create_tables
 
 
 def init_app():
@@ -11,8 +12,24 @@ def init_app():
 
     register_blueprints(_app)
     exc_handler(_app)
+    register_events(_app)
 
     return _app
+
+
+def register_events(_app):
+    """注册应用事件"""
+    @_app.on_event("startup")
+    async def startup_event():
+        # 创建数据库表
+        create_tables()
+        # 连接数据库
+        await connect_db()
+
+    @_app.on_event("shutdown")
+    async def shutdown_event():
+        # 断开数据库连接
+        await disconnect_db()
 
 
 def exc_handler(_app):
