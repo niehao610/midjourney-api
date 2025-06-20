@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile
 from loguru import logger
-
+import uuid
 from lib.api import discord
 from lib.api.discord import TriggerType
 from lib.db_operations import db_ops
@@ -33,12 +33,14 @@ async def imagine(body: TriggerImagineIn):
     
     # 创建数据库任务记录
     try:
+        task_id = str(uuid.uuid4())
         await db_ops.create_task(
-            task_name=body.prompt[:50],  # 截取前50个字符作为任务名
-            prompt=body.prompt,
+            task_name="imagine by prompt",
+            task_id=task_id,
             trigger_id=trigger_id,
             task_type=trigger_type,
             ref_pic_url=body.picurl,
+            image_index=0,
             task_status="SUBMITTED"
         )
     except Exception as e:
@@ -46,7 +48,7 @@ async def imagine(body: TriggerImagineIn):
 
     taskqueue.put(trigger_id, discord.generate, prompt)
     logger.info(f"任务创建成功: {trigger_id}")
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": trigger_id}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/upscale", response_model=TriggerResponse)
@@ -54,8 +56,25 @@ async def upscale(body: TriggerUVIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.upscale.value
 
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name="upscale image by index" + str(body.index),
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url='',
+            image_index=body.index,
+            msg_id=body.msg_id,
+            msg_hash=body.msg_hash,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
+
     taskqueue.put(trigger_id, discord.upscale, **body.dict())
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/variation", response_model=TriggerResponse)
@@ -63,8 +82,23 @@ async def variation(body: TriggerUVIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.variation.value
 
+    # 创建数据库任务记录
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name="variation image by index" + str(body.index),
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url='',
+            image_index=body.index,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.variation, **body.dict())
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/reset", response_model=TriggerResponse)
@@ -72,8 +106,23 @@ async def reset(body: TriggerResetIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.reset.value
 
+    # 创建数据库任务记录
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name="reset image",
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url='',
+            image_index=0,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.reset, **body.dict())
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/describe", response_model=TriggerResponse)
@@ -81,8 +130,23 @@ async def describe(body: TriggerDescribeIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.describe.value
 
+    # 创建数据库任务记录
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name="describe image",
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url=body.upload_filename,
+            image_index=0,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.describe, **body.dict())
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -152,17 +216,24 @@ async def midjourney_result(body: MidjourneyResultIn):
                 if body.attachments and len(body.attachments) > 0:
                     result_url = body.attachments[0].get("url")
                     msg_hash = body.attachments[0].get("filename").split("_")[-1].split(".")[0]
-            
+
+                task = await db_ops.get_task_by_trigger_id_status(body.trigger_id, "SUBMITTED")
+                if not task:
+                    logger.error(f"任务不存在: {body.trigger_id}")
+                    return {"message": "任务不存在"}
+                
+                task_id = task.get("task_id")
+                
                 # 更新任务结果
                 await db_ops.update_task_result(
-                    trigger_id=body.trigger_id,
+                    task_id=task_id,
                     task_status="SUCCESS",
                     result_url=result_url,
                     attachments=body.attachments,
                     msg_id=body.id, 
                     msg_hash=msg_hash  # 如果有消息hash，可以从其他地方获取
                 )
-                logger.info(f"任务结果更新成功: {body.trigger_id}")
+                logger.info(f"任务结果更新成功: {task_id} , trigger_id: {body.trigger_id}")
     except Exception as e:
         logger.error(f"更新任务结果失败: {e}")
     
@@ -181,15 +252,47 @@ async def queue_release(body: QueueReleaseIn):
 async def solo_variation(body: TriggerUVIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.solo_variation.value
+
+    # 创建数据库任务记录
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name="solo variation image",
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url='',
+            image_index=0,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.solo_variation, **body.dict())
 
     # 返回结果
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 @router.post("/solo_low_variation", response_model=TriggerResponse)
 async def solo_low_variation(body: TriggerUVIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.solo_low_variation.value
+
+    # 创建数据库任务记录
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name="solo low variation image",
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url='',
+            image_index=0,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.solo_low_variation, **body.dict())
 
     # 返回结果
@@ -199,39 +302,89 @@ async def solo_low_variation(body: TriggerUVIn):
 async def solo_high_variation(body: TriggerUVIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.solo_high_variation.value
+
+    # 创建数据库任务记录
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name="solo high variation image",
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url='',
+            image_index=0,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.solo_high_variation, **body.dict())
 
     # 返回结果
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 @router.post("/expand", response_model=TriggerResponse)
 async def expand(body: TriggerExpandIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.expand.value
+
+    # 创建数据库任务记录
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name=f"expand image {body.direction}",
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url='',
+            image_index=0,
+            direction=body.direction,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.expand, **body.dict())
 
     # 返回结果
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/zoomout", response_model=TriggerResponse)
 async def zoomout(body: TriggerZoomOutIn):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.zoomout.value
+
+    # 创建数据库任务记录
+    try:
+        task_id = str(uuid.uuid4())
+        await db_ops.create_task(
+            task_name=f"zoom out image {body.zoomout}x",
+            task_id=task_id,
+            trigger_id=trigger_id,
+            task_type=trigger_type,
+            ref_pic_url='',
+            image_index=0,
+            zoom_out=body.zoomout,
+            task_status="SUBMITTED"
+        )
+    except Exception as e:
+        logger.error(f"创建任务记录失败: {e}")
+
     taskqueue.put(trigger_id, discord.zoomout, **body.dict())
 
     # 返回结果
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
-@router.get("/task/{trigger_id}")
-async def get_task(trigger_id: str):
-    """根据trigger_id查询任务详情"""
+@router.get("/task/{task_id}")
+async def get_task_by_id(task_id: str):
+    """根据task_id查询任务详情"""
     try:
-        task = await db_ops.get_task_by_trigger_id(trigger_id)
+        task = await db_ops.get_task_by_task_id(task_id)
         if task:
             if task["task_status"] == "SUCCESS":
-                return {"status": "SUCCESS", "imageUrl": task["result_url"]}
+                return {"status": "SUCCESS", "imageUrl": task["result_url"], "buttons": {"msg_id": task["msg_id"], "msg_hash": task["msg_hash"]}}
             else:
                 return {"status":task["task_status"], "message": "任务未完成"}
         else:

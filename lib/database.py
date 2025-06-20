@@ -27,8 +27,10 @@ midjourney_task = Table(
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("task_name", String(64), nullable=False, default=""),
+    Column("task_id", String(64), nullable=False, default=""),
     Column("trigger_id", String(32), nullable=False, default=""),
     Column("ref_pic_url", Text, nullable=True),
+    Column("image_index", Integer, default=0),
     Column("msg_id", BigInteger, default=0),
     Column("msg_hash", String(64), default=""),
     Column("zoom_out", Integer, default=0),
@@ -40,8 +42,8 @@ midjourney_task = Table(
     Column("created_at", DateTime, default=func.now()),
     Column("updated_at", DateTime, default=func.now(), onupdate=func.now()),
     # 索引
-    Index("unq_trigger_id", "trigger_id", unique=True),
-    Index("idx_msg_id", "msg_id"),
+    Index("unq_task_id", "task_id", unique=True),
+    Index("idx_trigger_id", "trigger_id"),
 )
 
 
