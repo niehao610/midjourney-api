@@ -45,6 +45,7 @@ async def imagine(body: TriggerImagineIn):
         logger.error(f"创建任务记录失败: {e}")
 
     taskqueue.put(trigger_id, discord.generate, prompt)
+    logger.info(f"任务创建成功: {trigger_id}")
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": trigger_id}
 
 
@@ -142,26 +143,26 @@ async def midjourney_result(body: MidjourneyResultIn):
     # 更新数据库任务状态和结果
     try:
         if body.trigger_id:
-            # 提取结果URL
-            result_url = None
-            msg_hash = ''
-            if body.attachments and len(body.attachments) > 0:
-                result_url = body.attachments[0].get("url")
-                msg_hash = body.attachments[0].filename.split("_")[-1].split(".")[0]
-            
+
             # 确定任务状态
-            task_status = "SUCCESS" if body.type == "end" else "IN_PROGRESS"
+            if body.type == "end":
+                            # 提取结果URL
+                result_url = None
+                msg_hash = ''
+                if body.attachments and len(body.attachments) > 0:
+                    result_url = body.attachments[0].get("url")
+                    msg_hash = body.attachments[0].get("filename").split("_")[-1].split(".")[0]
             
-            # 更新任务结果
-            await db_ops.update_task_result(
-                trigger_id=body.trigger_id,
-                task_status=task_status,
-                result_url=result_url,
-                attachments=body.attachments,
-                msg_id=body.id, 
-                msg_hash=msg_hash  # 如果有消息hash，可以从其他地方获取
-            )
-            logger.info(f"任务结果更新成功: {body.trigger_id}")
+                # 更新任务结果
+                await db_ops.update_task_result(
+                    trigger_id=body.trigger_id,
+                    task_status="SUCCESS",
+                    result_url=result_url,
+                    attachments=body.attachments,
+                    msg_id=body.id, 
+                    msg_hash=msg_hash  # 如果有消息hash，可以从其他地方获取
+                )
+                logger.info(f"任务结果更新成功: {body.trigger_id}")
     except Exception as e:
         logger.error(f"更新任务结果失败: {e}")
     
