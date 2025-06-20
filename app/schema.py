@@ -51,7 +51,7 @@ class TriggerResponse(BaseModel):
     message: str = "success"
     trigger_id: str
     trigger_type: str = ""
-    result: str = ""
+    result: str
 
 
 class UploadResponse(BaseModel):

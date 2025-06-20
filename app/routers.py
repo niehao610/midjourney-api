@@ -53,15 +53,23 @@ async def imagine(body: TriggerImagineIn):
 
 @router.post("/upscale", response_model=TriggerResponse)
 async def upscale(body: TriggerUVIn):
-    trigger_id = body.trigger_id
+    
     trigger_type = TriggerType.upscale.value
 
     try:
-        task_id = str(uuid.uuid4())
+        old_task_id =  body.trigger_id
+
+        old_task = db_ops.get_task_by_task_id(old_task_id)
+
+        if not old_task:
+            return {"message": "任务不存在"}
+
+        trigger_id = old_task.get("trigger_id")
+        sub_task_id = str(uuid.uuid4())
         await db_ops.create_task(
             task_name="upscale image by index" + str(body.index),
-            task_id=task_id,
-            trigger_id=trigger_id,
+            task_id=sub_task_id,
+            trigger_id= trigger_id,
             task_type=trigger_type,
             ref_pic_url='',
             image_index=body.index,
@@ -74,7 +82,7 @@ async def upscale(body: TriggerUVIn):
 
 
     taskqueue.put(trigger_id, discord.upscale, **body.dict())
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": sub_task_id}
 
 
 @router.post("/variation", response_model=TriggerResponse)
