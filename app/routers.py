@@ -59,7 +59,7 @@ async def upscale(body: TriggerUVIn):
     try:
         old_task_id =  body.trigger_id
 
-        old_task = db_ops.get_task_by_task_id(old_task_id)
+        old_task = await db_ops.get_task_by_task_id(old_task_id)
 
         if not old_task:
             return {"message": "任务不存在"}
@@ -87,19 +87,28 @@ async def upscale(body: TriggerUVIn):
 
 @router.post("/variation", response_model=TriggerResponse)
 async def variation(body: TriggerUVIn):
-    trigger_id = body.trigger_id
     trigger_type = TriggerType.variation.value
 
     # 创建数据库任务记录
     try:
-        task_id = str(uuid.uuid4())
+        old_task_id =  body.trigger_id
+
+        old_task = await db_ops.get_task_by_task_id(old_task_id)
+
+        if not old_task:
+            return {"message": "任务不存在"}
+
+        trigger_id = old_task.get("trigger_id")
+        sub_task_id = str(uuid.uuid4())
         await db_ops.create_task(
             task_name="variation image by index" + str(body.index),
-            task_id=task_id,
+            task_id=sub_task_id,
             trigger_id=trigger_id,
             task_type=trigger_type,
             ref_pic_url='',
             image_index=body.index,
+            msg_id=body.msg_id,
+            msg_hash=body.msg_hash,
             task_status="SUBMITTED"
         )
     except Exception as e:
