@@ -13,7 +13,7 @@ DRAW_VERSION = getenv("DRAW_VERSION")
 # 数据库配置
 DB_HOST = getenv("DB_HOST", "localhost")
 DB_PORT = getenv("DB_PORT", "3306")
-DB_NAME = getenv("DB_NAME", "luban_svr")
+DB_NAME = getenv("DB_NAME", "luban_v2v")
 DB_USER = getenv("DB_USER", "root")
 DB_PASSWORD = getenv("DB_PASSWORD", "12345678")
 
