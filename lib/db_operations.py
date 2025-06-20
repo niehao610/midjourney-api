@@ -1,0 +1,170 @@
+import json
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+from loguru import logger
+
+from .database import database, midjourney_task
+
+
+class MidjourneyTaskOperations:
+    """Midjourney任务数据库操作类"""
+
+    @staticmethod
+    async def create_task(
+        task_name: str,
+        trigger_id: str,
+        task_type: str,
+        ref_pic_url: Optional[str] = None,
+        msg_id: int = 0,
+        prompt: str = "",
+        msg_hash: str = "",
+        zoom_out: int = 0,
+        direction: str = "",
+        task_status: str = "NOT_START"
+    ) -> int:
+        """创建新任务"""
+        try:
+            query = midjourney_task.insert().values(
+                task_name=task_name,
+                trigger_id=trigger_id,
+                ref_pic_url=ref_pic_url,
+                msg_id=msg_id,
+                msg_hash=msg_hash,
+                zoom_out=zoom_out,
+                direction=direction,
+                task_type=task_type,
+                task_status=task_status,
+                created_at=datetime.now(),
+                updated_at=datetime.now()
+            )
+            result = await database.execute(query)
+            logger.info(f"创建任务成功，trigger_id: {trigger_id}, task_id: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"创建任务失败: {e}")
+            raise
+
+    @staticmethod
+    async def get_task_by_trigger_id(trigger_id: str) -> Optional[Dict]:
+        """根据trigger_id获取任务"""
+        try:
+            query = midjourney_task.select().where(midjourney_task.c.trigger_id == trigger_id)
+            result = await database.fetch_one(query)
+            if result:
+                return dict(result)
+            return None
+        except Exception as e:
+            logger.error(f"查询任务失败: {e}")
+            return None
+
+    @staticmethod
+    async def get_task_by_msg_id(msg_id: int) -> Optional[Dict]:
+        """根据msg_id获取任务"""
+        try:
+            query = midjourney_task.select().where(midjourney_task.c.msg_id == msg_id)
+            result = await database.fetch_one(query)
+            if result:
+                return dict(result)
+            return None
+        except Exception as e:
+            logger.error(f"查询任务失败: {e}")
+            return None
+
+    @staticmethod
+    async def update_task_status(trigger_id: str, task_status: str) -> bool:
+        """更新任务状态"""
+        try:
+            query = midjourney_task.update().where(
+                midjourney_task.c.trigger_id == trigger_id
+            ).values(
+                task_status=task_status,
+                updated_at=datetime.now()
+            )
+            result = await database.execute(query)
+            logger.info(f"更新任务状态成功，trigger_id: {trigger_id}, status: {task_status}")
+            return result > 0
+        except Exception as e:
+            logger.error(f"更新任务状态失败: {e}")
+            return False
+
+    @staticmethod
+    async def update_task_result(
+        trigger_id: str,
+        task_status: str,
+        result_url: Optional[str] = None,
+        attachments: Optional[List[Dict]] = None,
+        msg_id: Optional[int] = None,
+        msg_hash: Optional[str] = None
+    ) -> bool:
+        """更新任务结果"""
+        try:
+            update_data = {
+                "task_status": task_status,
+                "updated_at": datetime.now()
+            }
+            
+            if result_url:
+                update_data["result_url"] = result_url
+            
+            if attachments:
+                update_data["attachments"] = json.dumps(attachments, ensure_ascii=False)
+            
+            if msg_id:
+                update_data["msg_id"] = msg_id
+                
+            if msg_hash:
+                update_data["msg_hash"] = msg_hash
+
+            query = midjourney_task.update().where(
+                midjourney_task.c.trigger_id == trigger_id
+            ).values(**update_data)
+            
+            result = await database.execute(query)
+            logger.info(f"更新任务结果成功，trigger_id: {trigger_id}")
+            return result > 0
+        except Exception as e:
+            logger.error(f"更新任务结果失败: {e}")
+            return False
+
+    @staticmethod
+    async def get_tasks_by_status(task_status: str, limit: int = 100) -> List[Dict]:
+        """根据状态获取任务列表"""
+        try:
+            query = midjourney_task.select().where(
+                midjourney_task.c.task_status == task_status
+            ).limit(limit).order_by(midjourney_task.c.created_at.desc())
+            
+            results = await database.fetch_all(query)
+            return [dict(result) for result in results]
+        except Exception as e:
+            logger.error(f"查询任务列表失败: {e}")
+            return []
+
+    @staticmethod
+    async def delete_task(trigger_id: str) -> bool:
+        """删除任务"""
+        try:
+            query = midjourney_task.delete().where(midjourney_task.c.trigger_id == trigger_id)
+            result = await database.execute(query)
+            logger.info(f"删除任务成功，trigger_id: {trigger_id}")
+            return result > 0
+        except Exception as e:
+            logger.error(f"删除任务失败: {e}")
+            return False
+
+    @staticmethod
+    async def get_all_tasks(limit: int = 100, offset: int = 0) -> List[Dict]:
+        """获取所有任务"""
+        try:
+            query = midjourney_task.select().limit(limit).offset(offset).order_by(
+                midjourney_task.c.created_at.desc()
+            )
+            results = await database.fetch_all(query)
+            return [dict(result) for result in results]
+        except Exception as e:
+            logger.error(f"查询所有任务失败: {e}")
+            return []
+
+
+# 创建操作实例
+db_ops = MidjourneyTaskOperations() 
