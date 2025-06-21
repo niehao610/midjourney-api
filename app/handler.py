@@ -15,8 +15,10 @@ PROMPT_SUFFIX = "#>"
 
 def check_banned(prompt: str):
     words = set(w.lower() for w in prompt.split())
-    if len(words & BANNED_PROMPT) != 0:
-        raise BannedPromptError(f"banned prompt: {prompt}")
+    v = words & BANNED_PROMPT
+    print(v)
+    if len(v ) != 0:
+        raise BannedPromptError(f"banned prompt: {str(v)}")
 
 
 def unique_id():
