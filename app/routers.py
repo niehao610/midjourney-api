@@ -33,6 +33,9 @@ async def imagine(
     current_user: dict = Depends(get_current_user),
     _: bool = Depends(check_user_token_limit)
 ):
+    # 记录API请求日志
+    logger.info(f"🎨 /imagine请求 - 用户: {current_user.get('user_name')}, Prompt长度: {len(body.prompt)}, PicURL: {'有' if body.picurl else '无'}")
+    
     trigger_id, prompt = prompt_handler(body.prompt, body.picurl)
     trigger_type = TriggerType.generate.value
 

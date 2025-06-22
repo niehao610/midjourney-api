@@ -221,13 +221,18 @@ class UserInfoOperations:
     async def get_user_by_app_key(app_key: str) -> Optional[Dict]:
         """根据app_key获取用户信息"""
         try:
+            logger.debug(f"🔍 数据库查询用户 - App Key: {app_key}")
             query = user_info.select().where(user_info.c.app_key == app_key)
             result = await database.fetch_one(query)
             if result:
-                return dict(result)
-            return None
+                user_data = dict(result)
+                logger.debug(f"✅ 数据库查询成功 - 用户: {user_data.get('user_name')}, ID: {user_data.get('id')}")
+                return user_data
+            else:
+                logger.debug(f"❌ 数据库中未找到用户 - App Key: {app_key}")
+                return None
         except Exception as e:
-            logger.error(f"查询用户信息失败: {e}")
+            logger.error(f"❌ 数据库查询用户信息异常 - App Key: {app_key}, 错误: {e}")
             return None
 
     @staticmethod

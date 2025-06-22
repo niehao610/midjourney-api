@@ -5,9 +5,13 @@ from fastapi.responses import JSONResponse
 
 from exceptions import APPBaseException, ErrorCode
 from lib.database import connect_db, disconnect_db, create_tables
+from log_config import setup_api_logger
 
 
 def init_app():
+    # 初始化日志系统
+    setup_api_logger()
+    
     _app = FastAPI(title="Midjourney API")
 
     register_blueprints(_app)
