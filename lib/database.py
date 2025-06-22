@@ -46,6 +46,22 @@ midjourney_task = Table(
     Index("idx_trigger_id", "trigger_id"),
 )
 
+# 定义 user_info 表结构
+user_info = Table(
+    "user_info",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("user_name", String(64), nullable=False, default=""),
+    Column("app_key", String(64), nullable=False, default=""),
+    Column("token_total", Integer, default=0),
+    Column("token_use", Integer, default=0),
+    Column("created_at", DateTime, default=func.now()),
+    Column("updated_at", DateTime, default=func.now(), onupdate=func.now()),
+    # 索引
+    Index("uiq_user_name", "user_name", unique=True),
+    Index("uiq_app_key", "app_key", unique=True),
+)
+
 
 async def connect_db():
     """连接数据库"""

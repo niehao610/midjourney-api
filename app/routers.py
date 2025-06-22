@@ -1,9 +1,11 @@
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, UploadFile, Depends
+from fastapi.security import HTTPAuthorizationCredentials
 from loguru import logger
 import uuid
 from lib.api import discord
 from lib.api.discord import TriggerType
 from lib.db_operations import db_ops
+from lib.auth import get_current_user, check_user_token_limit, consume_user_token_by_app_key
 from util._queue import taskqueue
 from .handler import prompt_handler, unique_id
 from .schema import (
@@ -26,7 +28,11 @@ router = APIRouter()
 
 
 @router.post("/imagine", response_model=TriggerResponse)
-async def imagine(body: TriggerImagineIn):
+async def imagine(
+    body: TriggerImagineIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_id, prompt = prompt_handler(body.prompt, body.picurl)
     trigger_type = TriggerType.generate.value
 
@@ -48,11 +54,19 @@ async def imagine(body: TriggerImagineIn):
 
     taskqueue.put(trigger_id, discord.generate, prompt)
     logger.info(f"任务创建成功: {trigger_id}")
+    
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+    
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/upscale", response_model=TriggerResponse)
-async def upscale(body: TriggerUVIn):
+async def upscale(
+    body: TriggerUVIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     
     trigger_type = TriggerType.upscale.value
 
@@ -82,11 +96,19 @@ async def upscale(body: TriggerUVIn):
 
 
     taskqueue.put(trigger_id, discord.upscale, **body.dict())
+    
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+    
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": sub_task_id}
 
 
 @router.post("/variation", response_model=TriggerResponse)
-async def variation(body: TriggerUVIn):
+async def variation(
+    body: TriggerUVIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_type = TriggerType.variation.value
 
     # 创建数据库任务记录
@@ -115,11 +137,19 @@ async def variation(body: TriggerUVIn):
         logger.error(f"创建任务记录失败: {e}")
 
     taskqueue.put(trigger_id, discord.variation, **body.dict())
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
+    
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+    
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": sub_task_id}
 
 
 @router.post("/reset", response_model=TriggerResponse)
-async def reset(body: TriggerResetIn):
+async def reset(
+    body: TriggerResetIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.reset.value
 
@@ -139,11 +169,19 @@ async def reset(body: TriggerResetIn):
         logger.error(f"创建任务记录失败: {e}")
 
     taskqueue.put(trigger_id, discord.reset, **body.dict())
+    
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+    
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/describe", response_model=TriggerResponse)
-async def describe(body: TriggerDescribeIn):
+async def describe(
+    body: TriggerDescribeIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.describe.value
 
@@ -163,11 +201,18 @@ async def describe(body: TriggerDescribeIn):
         logger.error(f"创建任务记录失败: {e}")
 
     taskqueue.put(trigger_id, discord.describe, **body.dict())
+    
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+    
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_attachment(file: UploadFile):
+async def upload_attachment(
+    file: UploadFile,
+    current_user: dict = Depends(get_current_user)
+):
     if not file.content_type.startswith("image/"):
         return {"message": "must image"}
 
@@ -186,7 +231,10 @@ async def upload_attachment(file: UploadFile):
 
 
 @router.post("/message", response_model=SendMessageResponse)
-async def send_message(body: SendMessageIn):
+async def send_message(
+    body: SendMessageIn,
+    current_user: dict = Depends(get_current_user)
+):
     picurl = await discord.send_attachment_message(body.upload_filename)
     if not picurl:
         return {"message": "Failed to send message"}
@@ -258,7 +306,10 @@ async def midjourney_result(body: MidjourneyResultIn):
 
 
 @router.post("/queue/release", response_model=TriggerResponse)
-async def queue_release(body: QueueReleaseIn):
+async def queue_release(
+    body: QueueReleaseIn,
+    current_user: dict = Depends(get_current_user)
+):
     """bot 清除队列任务"""
     taskqueue.pop(body.trigger_id)
 
@@ -266,7 +317,11 @@ async def queue_release(body: QueueReleaseIn):
 
 
 @router.post("/solo_variation", response_model=TriggerResponse)
-async def solo_variation(body: TriggerUVIn):
+async def solo_variation(
+    body: TriggerUVIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.solo_variation.value
 
@@ -287,11 +342,18 @@ async def solo_variation(body: TriggerUVIn):
 
     taskqueue.put(trigger_id, discord.solo_variation, **body.dict())
 
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+
     # 返回结果
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 @router.post("/solo_low_variation", response_model=TriggerResponse)
-async def solo_low_variation(body: TriggerUVIn):
+async def solo_low_variation(
+    body: TriggerUVIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.solo_low_variation.value
 
@@ -312,11 +374,18 @@ async def solo_low_variation(body: TriggerUVIn):
 
     taskqueue.put(trigger_id, discord.solo_low_variation, **body.dict())
 
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+
     # 返回结果
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type}
+    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 @router.post("/solo_high_variation", response_model=TriggerResponse)
-async def solo_high_variation(body: TriggerUVIn):
+async def solo_high_variation(
+    body: TriggerUVIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.solo_high_variation.value
 
@@ -337,11 +406,18 @@ async def solo_high_variation(body: TriggerUVIn):
 
     taskqueue.put(trigger_id, discord.solo_high_variation, **body.dict())
 
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+
     # 返回结果
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 @router.post("/expand", response_model=TriggerResponse)
-async def expand(body: TriggerExpandIn):
+async def expand(
+    body: TriggerExpandIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.expand.value
 
@@ -363,12 +439,19 @@ async def expand(body: TriggerExpandIn):
 
     taskqueue.put(trigger_id, discord.expand, **body.dict())
 
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+
     # 返回结果
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/zoomout", response_model=TriggerResponse)
-async def zoomout(body: TriggerZoomOutIn):
+async def zoomout(
+    body: TriggerZoomOutIn,
+    current_user: dict = Depends(get_current_user),
+    _: bool = Depends(check_user_token_limit)
+):
     trigger_id = body.trigger_id
     trigger_type = TriggerType.zoomout.value
 
@@ -390,12 +473,18 @@ async def zoomout(body: TriggerZoomOutIn):
 
     taskqueue.put(trigger_id, discord.zoomout, **body.dict())
 
+    # 消费用户token
+    await consume_user_token_by_app_key(current_user.get('app_key'))
+
     # 返回结果
     return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
 
 
 @router.get("/task/{task_id}")
-async def get_task_by_id(task_id: str):
+async def get_task_by_id(
+    task_id: str,
+    current_user: dict = Depends(get_current_user)
+):
     """根据task_id查询任务详情"""
     try:
         task = await db_ops.get_task_by_task_id(task_id)
@@ -412,7 +501,12 @@ async def get_task_by_id(task_id: str):
 
 
 @router.get("/tasks")
-async def get_tasks(status: str = None, limit: int = 100, offset: int = 0):
+async def get_tasks(
+    status: str = None,
+    limit: int = 100,
+    offset: int = 0,
+    current_user: dict = Depends(get_current_user)
+):
     """查询任务列表"""
     try:
         if status:

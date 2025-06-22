@@ -13,9 +13,8 @@ def init_app():
     register_blueprints(_app)
     exc_handler(_app)
     register_events(_app)
-
+    
     return _app
-
 
 def register_events(_app):
     """注册应用事件"""

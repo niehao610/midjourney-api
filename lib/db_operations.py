@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from loguru import logger
 
-from .database import database, midjourney_task
+from .database import database, midjourney_task, user_info
 
 
 class MidjourneyTaskOperations:
@@ -214,5 +214,88 @@ class MidjourneyTaskOperations:
             return []
 
 
+class UserInfoOperations:
+    """用户信息数据库操作类"""
+
+    @staticmethod
+    async def get_user_by_app_key(app_key: str) -> Optional[Dict]:
+        """根据app_key获取用户信息"""
+        try:
+            query = user_info.select().where(user_info.c.app_key == app_key)
+            result = await database.fetch_one(query)
+            if result:
+                return dict(result)
+            return None
+        except Exception as e:
+            logger.error(f"查询用户信息失败: {e}")
+            return None
+
+    @staticmethod
+    async def get_user_by_username(user_name: str) -> Optional[Dict]:
+        """根据用户名获取用户信息"""
+        try:
+            query = user_info.select().where(user_info.c.user_name == user_name)
+            result = await database.fetch_one(query)
+            if result:
+                return dict(result)
+            return None
+        except Exception as e:
+            logger.error(f"查询用户信息失败: {e}")
+            return None
+
+    @staticmethod
+    async def create_user(user_name: str, app_key: str, token_total: int = 0) -> Optional[int]:
+        """创建新用户"""
+        try:
+            query = user_info.insert().values(
+                user_name=user_name,
+                app_key=app_key,
+                token_total=token_total,
+                token_use=0,
+                created_at=datetime.now(),
+                updated_at=datetime.now()
+            )
+            result = await database.execute(query)
+            logger.info(f"创建用户成功，user_name: {user_name}, app_key: {app_key}")
+            return result
+        except Exception as e:
+            logger.error(f"创建用户失败: {e}")
+            return None
+
+    @staticmethod
+    async def update_token_usage(app_key: str, token_use_increment: int = 1) -> bool:
+        """更新用户token使用量"""
+        try:
+            # 先获取当前使用量
+            query = user_info.update().where(
+                user_info.c.app_key == app_key
+            ).values(
+                token_use=user_info.c.token_use + token_use_increment,
+                updated_at=datetime.now()
+            )
+            result = await database.execute(query)
+            if result > 0:
+                logger.info(f"更新用户token使用量成功，app_key: {app_key}, increment: {token_use_increment}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"更新用户token使用量失败: {e}")
+            return False
+
+    @staticmethod
+    async def check_token_limit(app_key: str) -> bool:
+        """检查用户是否还有可用token"""
+        try:
+            user = await UserInfoOperations.get_user_by_app_key(app_key)
+            if not user:
+                return False
+            
+            return user.get('token_use', 0) < user.get('token_total', 0)
+        except Exception as e:
+            logger.error(f"检查token限制失败: {e}")
+            return False
+
+
 # 创建操作实例
-db_ops = MidjourneyTaskOperations() 
+db_ops = MidjourneyTaskOperations()
+user_ops = UserInfoOperations() 
