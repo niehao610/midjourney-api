@@ -78,6 +78,10 @@ class TaskQueue:
                 except Exception as e:
                     logger.error(f"❌ Task[{key}] 执行失败: {e}")
                     logger.exception(e)
+                finally:
+                    # 🔥 关键修复：任务完成后自动从并发队列移除
+                    logger.info(f"🧹 Task[{key}] 从并发队列移除")
+                    self.pop(key)
             
             tsk.add_done_callback(task_done_callback)
             
