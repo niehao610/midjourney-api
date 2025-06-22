@@ -311,10 +311,10 @@ async def midjourney_result(body: MidjourneyResultIn):
 
 @router.post("/queue/release", response_model=TriggerResponse)
 async def queue_release(
-    body: QueueReleaseIn,
-    current_user: dict = Depends(get_current_user)
+    body: QueueReleaseIn
 ):
     """bot 清除队列任务"""
+    logger.info(f"清除队列任务: {body.trigger_id}")
     taskqueue.pop(body.trigger_id)
 
     return body

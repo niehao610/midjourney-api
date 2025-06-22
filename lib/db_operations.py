@@ -79,7 +79,7 @@ class MidjourneyTaskOperations:
     async def get_task_by_trigger_id_status(trigger_id: str, task_status: str) -> Optional[Dict]:
         """根据trigger_id和任务状态获取任务"""
         try:
-            query = midjourney_task.select().where(midjourney_task.c.trigger_id == trigger_id).where(midjourney_task.c.task_status == task_status)
+            query = midjourney_task.select().where(midjourney_task.c.trigger_id == trigger_id).where(midjourney_task.c.task_status == task_status).order_by(midjourney_task.c.id.desc())
             result = await database.fetch_one(query)
             if result:
                 return dict(result)
