@@ -25,6 +25,7 @@ async def on_ready():
 @bot.event
 async def on_message(message: Message):
     if message.author.id != 936929561302675456:
+        logger.debug(f"on_message: {message.content} ，author: {message.author.id}  != 936929561302675456")
         return
 
     logger.debug(f"on_message: {message.content}")

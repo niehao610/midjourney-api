@@ -42,9 +42,14 @@ class TaskQueue:
         if len(self._wait_queue) >= self._wait_size:
             raise QueueFullError(f"Task queue is full: {self._wait_size}")
 
+        task = Task(func, *args, **kwargs)
         self._wait_queue.append({
-            _trigger_id: Task(func, *args, **kwargs)
+            _trigger_id: task
         })
+        
+        logger.info(f"📝 Task[{_trigger_id}] 添加到队列: {task}")
+        logger.info(f"📊 队列状态 - 等待: {len(self._wait_queue)}, 并发: {len(self._concur_queue)}/{self._concur_size}")
+        
         while self._wait_queue and len(self._concur_queue) < self._concur_size:
             self._exec()
 
@@ -57,15 +62,28 @@ class TaskQueue:
             pass
 
     def _exec(self):
-        key, task = self._wait_queue.popleft().popitem()
-        self._concur_queue.append(key)
+        try:
+            key, task = self._wait_queue.popleft().popitem()
+            self._concur_queue.append(key)
 
-        logger.debug(f"Task[{key}] start execution: {task}")
-        loop = asyncio.get_running_loop()
-        tsk = loop.create_task(task())
-        # tsk.add_done_callback(
-        #     lambda t: print(t.result())
-        # )  # todo
+            logger.info(f"🚀 Task[{key}] 开始执行: {task}")
+            
+            loop = asyncio.get_running_loop()
+            tsk = loop.create_task(task())
+            
+            def task_done_callback(future):
+                try:
+                    result = future.result()
+                    logger.info(f"✅ Task[{key}] 执行成功")
+                except Exception as e:
+                    logger.error(f"❌ Task[{key}] 执行失败: {e}")
+                    logger.exception(e)
+            
+            tsk.add_done_callback(task_done_callback)
+            
+        except Exception as e:
+            logger.error(f"❌ 队列执行异常: {e}")
+            logger.exception(e)
 
     def concur_size(self):
         return self._concur_size

@@ -110,6 +110,10 @@ def _trigger_payload(type_: int, data: Dict[str, Any], **kwargs) -> Dict[str, An
 
 
 async def generate(prompt: str, **kwargs):
+    from loguru import logger
+    
+    logger.info(f"🎨 Discord.generate 开始执行 - Prompt: {prompt[:100]}...")
+    
     payload = _trigger_payload(2, {
         "version": DRAW_VERSION,
         "id": "938956540159881230",
@@ -122,7 +126,14 @@ async def generate(prompt: str, **kwargs):
         }],
         "attachments": []
     })
-    return await trigger(payload)
+    
+    try:
+        result = await trigger(payload)
+        logger.info(f"✅ Discord.generate 调用成功")
+        return result
+    except Exception as e:
+        logger.error(f"❌ Discord.generate 调用失败: {e}")
+        raise
 
 
 async def upscale(index: int, msg_id: str, msg_hash: str, **kwargs):
