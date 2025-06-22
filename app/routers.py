@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, Depends
 from fastapi.security import HTTPAuthorizationCredentials
 from loguru import logger
 import uuid
+from datetime import datetime
 from lib.api import discord
 from lib.api.discord import TriggerType
 from lib.db_operations import db_ops
@@ -494,6 +495,12 @@ async def get_task_by_id(
             if task["task_status"] == "SUCCESS":
                 return {"status": "SUCCESS", "imageUrl": task["result_url"], "buttons": {"msg_id": task["msg_id"], "msg_hash": task["msg_hash"]}}
             else:
+                tm1 = task['updated_at']
+                now = datetime.now()
+                diff = now - tm1
+                if diff.total_seconds() > 185:
+                    return {"status": "FAILURE", "message": "任务超时"}
+
                 return {"status":task["task_status"], "message": "任务未完成"}
         else:
             return {"status": "FAILURE", "message": "任务不存在"}
