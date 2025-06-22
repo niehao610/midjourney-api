@@ -485,8 +485,7 @@ async def zoomout(
 
 @router.get("/task/{task_id}")
 async def get_task_by_id(
-    task_id: str,
-    current_user: dict = Depends(get_current_user)
+    task_id: str
 ):
     """根据task_id查询任务详情"""
     try:
