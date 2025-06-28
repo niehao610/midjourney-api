@@ -390,6 +390,12 @@ async def midjourney_result(body: MidjourneyResultIn):
                     msg_hash=msg_hash  # 如果有消息hash，可以从其他地方获取
                 )
                 logger.info(f"任务结果更新成功: {task_id} , trigger_id: {body.trigger_id}")
+            elif body.type == "banned":
+                logger.error(f"任务被封禁: {body.trigger_id}")
+                await db_ops.update_task_result(
+                    task_id=task_id,
+                    task_status="BANNED"
+                )
     except Exception as e:
         logger.error(f"更新任务结果失败: {e}")
     
