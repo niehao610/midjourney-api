@@ -133,13 +133,14 @@ async def imagine(
     except Exception as e:
         logger.error(f"创建任务记录失败: {e}")
 
+
     taskqueue.put(trigger_id, discord.generate, prompt)
     logger.info(f"任务创建成功: {trigger_id}")
     
     # 消费用户token
     await consume_user_token_by_app_key(current_user.get('app_key'))
     
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": task_id}
+    return {"code": 0,  "trigger_id": trigger_id,  "trigger_type": trigger_type, "result": task_id}
 
 
 @router.post("/upscale", response_model=TriggerResponse)
@@ -181,7 +182,7 @@ async def upscale(
     # 消费用户token
     await consume_user_token_by_app_key(current_user.get('app_key'))
     
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": sub_task_id}
+    return {"code": 0,  "trigger_id": trigger_id,  "trigger_type": trigger_type, "result": sub_task_id}
 
 
 @router.post("/variation", response_model=TriggerResponse)
@@ -222,7 +223,7 @@ async def variation(
     # 消费用户token
     await consume_user_token_by_app_key(current_user.get('app_key'))
     
-    return {"trigger_id": trigger_id, "trigger_type": trigger_type, "result": sub_task_id}
+    return {"code": 0,  "trigger_id": trigger_id,  "trigger_type": trigger_type, "result": sub_task_id}
 
 
 @router.post("/reset", response_model=TriggerResponse)
