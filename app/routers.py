@@ -370,7 +370,7 @@ async def midjourney_result(body: MidjourneyResultIn):
                 
                 task_id = task.get("task_id")
 
-                if task.get("task_type") == 'imagine' or  task.get("task_type").startswith('variation'):
+                if task.get("task_type") == 'generate' or  task.get("task_type").startswith('variation'):
                     ##下载图片result_url到本地
                     result_local_path = _download_and_split_file(result_url, "downloads")
                     if result_local_path:
