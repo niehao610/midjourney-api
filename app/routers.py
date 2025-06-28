@@ -374,7 +374,8 @@ async def midjourney_result(body: MidjourneyResultIn):
                 if task.get("task_type") == 'generate' or  task.get("task_type").startswith('variation'):
                     ##下载图片result_url到本地
                     result_local_path = _download_and_split_file(result_url, "downloads")
-                    if result_local_path:
+                    if result_local_path and len(result_local_path) > 1:
+                        result_url = ''
                         for i, url in enumerate(result_local_path):
                             if i > 0:
                                 result_url += "||"
@@ -396,6 +397,7 @@ async def midjourney_result(body: MidjourneyResultIn):
                     task_id=task_id,
                     task_status="BANNED"
                 )
+                logger.info(f"任务被封禁: {body.trigger_id}")
     except Exception as e:
         logger.error(f"更新任务结果失败: {e}")
     
