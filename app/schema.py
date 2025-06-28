@@ -48,6 +48,7 @@ class QueueReleaseIn(BaseModel):
 
 
 class TriggerResponse(BaseModel):
+    code: int = 1
     message: str = "success"
     trigger_id: str
     trigger_type: str = ""
