@@ -2,6 +2,8 @@ import uvicorn
 from fastapi import FastAPI, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+import os
 
 from exceptions import APPBaseException, ErrorCode
 from lib.database import connect_db, disconnect_db, create_tables
@@ -15,6 +17,7 @@ def init_app():
     _app = FastAPI(title="Midjourney API")
 
     register_blueprints(_app)
+    register_static_files(_app)
     exc_handler(_app)
     register_events(_app)
     
@@ -55,6 +58,23 @@ def exc_handler(_app):
                 "message": exc.message
             },
         )
+
+
+def register_static_files(_app):
+    """注册静态文件服务"""
+    # 创建静态文件目录（如果不存在）
+    static_dir = "static"
+    downloads_dir = "downloads"
+    
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    
+    if not os.path.exists(downloads_dir):
+        os.makedirs(downloads_dir)
+    
+    # 挂载静态文件目录
+    _app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    _app.mount("/downloads", StaticFiles(directory=downloads_dir), name="downloads")
 
 
 def register_blueprints(_app):

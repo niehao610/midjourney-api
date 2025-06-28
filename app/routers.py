@@ -3,12 +3,19 @@ from fastapi.security import HTTPAuthorizationCredentials
 from loguru import logger
 import uuid
 from datetime import datetime
+import os
+from urllib.parse import urlparse
+import requests
+import time
+from typing import List
+
 from lib.api import discord
 from lib.api.discord import TriggerType
 from lib.db_operations import db_ops
 from lib.auth import get_current_user, check_user_token_limit, consume_user_token_by_app_key
 from util._queue import taskqueue
 from .handler import prompt_handler, unique_id
+from PIL import Image
 from .schema import (
     TriggerExpandIn,
     TriggerImagineIn,
@@ -24,6 +31,76 @@ from .schema import (
     MidjourneyResultIn,
     SimpleResponse,
 )
+
+
+
+
+
+def _download_and_split_file( file_url: str,  download_dir: str) -> List[str]:
+        """下载文件到本地"""
+        try:
+            # 解析文件URL获取文件扩展名
+            file_name = f"{int(time.time()*1000)}.png"
+
+            # 帧图片保存到场景目录
+            local_path = os.path.join(download_dir, file_name)
+            
+            # 下载文件
+            logger.info(f"⬇️ 开始下载: {file_url}")
+            result_local_path = []
+            response = requests.get(file_url, stream=True, timeout=30)
+            if response.status_code == 200:
+                # 如果文件已存在，跳过下载
+                if os.path.exists(local_path):
+                    ## 如果文件存在，重命名
+                    os.rename(local_path, local_path.replace(".png", f"_{int(time.time())}.png"))   
+                    
+                with open(local_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+
+                ##图片是 discord 的，是由4张图组成的，需要下载4张图, 对图片进行裁剪，然后保存到本地
+                ##图片是 discord 的，是由4张图组成的，需要下载4张图, 对图片进行裁剪，然后保存到本地
+                img = Image.open(local_path)
+                width, height = img.size
+                # 计算单张图片的尺寸
+                single_width = width // 2
+                single_height = height // 2
+                
+                print(f"单张图片尺寸: {single_width} x {single_height}")
+                
+                # 获取原图文件名（不含扩展名）
+                base_name = os.path.splitext(os.path.basename(local_path))[0]
+                ext = os.path.splitext(local_path)[1]
+
+                # 定义四个区域的坐标 (left, top, right, bottom)
+                regions = [
+                    (0, 0, single_width, single_height),                    # 左上
+                    (single_width, 0, width, single_height),                # 右上
+                    (0, single_height, single_width, height),               # 左下
+                    (single_width, single_height, width, height)            # 右下
+                ]
+                position_labels = ['1', '2', '3', '4']
+                for i, (region, label) in enumerate(zip(regions, position_labels)):
+                    # 裁剪图片
+                    cropped_img = img.crop(region)
+                    
+                    # 生成输出文件名
+                    output_filename = f"{base_name}_{label}{ext}"
+                    output_path = os.path.join(download_dir, output_filename)
+                    
+                    # 保存图片
+                    cropped_img.save(output_path)
+                    result_local_path.append("http://v2v.jifeng.online/downloads/" + output_filename)
+                img.close()
+            else:
+                logger.error(f"❌ 下载失败: HTTP {response.status_code}")
+
+            return result_local_path
+        except Exception as e:
+            logger.error(f"❌ 下载文件失败: {file_url} - {e}")
+            return None
 
 router = APIRouter()
 
@@ -43,9 +120,9 @@ async def imagine(
     
     # 创建数据库任务记录
     try:
-        task_id = str(uuid.uuid4())
+        task_id = str(int(time.time()*1000))
         await db_ops.create_task(
-            task_name="imagine by prompt",
+            task_name="imagine",
             task_id=task_id,
             trigger_id=trigger_id,
             task_type=trigger_type,
@@ -85,7 +162,7 @@ async def upscale(
         trigger_id = old_task.get("trigger_id")
         sub_task_id = str(uuid.uuid4())
         await db_ops.create_task(
-            task_name="upscale image by index" + str(body.index),
+            task_name="upscale-" + str(body.index),
             task_id=sub_task_id,
             trigger_id= trigger_id,
             task_type=trigger_type,
@@ -127,7 +204,7 @@ async def variation(
         trigger_id = old_task.get("trigger_id")
         sub_task_id = str(uuid.uuid4())
         await db_ops.create_task(
-            task_name="variation image by index" + str(body.index),
+            task_name="variation-" + str(body.index),
             task_id=sub_task_id,
             trigger_id=trigger_id,
             task_type=trigger_type,
@@ -161,7 +238,7 @@ async def reset(
     try:
         task_id = str(uuid.uuid4())
         await db_ops.create_task(
-            task_name="reset image",
+            task_name="reset",
             task_id=task_id,
             trigger_id=trigger_id,
             task_type=trigger_type,
@@ -193,7 +270,7 @@ async def describe(
     try:
         task_id = str(uuid.uuid4())
         await db_ops.create_task(
-            task_name="describe image",
+            task_name="describe",
             task_id=task_id,
             trigger_id=trigger_id,
             task_type=trigger_type,
@@ -292,7 +369,16 @@ async def midjourney_result(body: MidjourneyResultIn):
                     return {"message": "任务不存在"}
                 
                 task_id = task.get("task_id")
-                
+
+                if task.get("task_type") == 'imagine' or  task.get("task_type").startswith('variation'):
+                    ##下载图片result_url到本地
+                    result_local_path = _download_and_split_file(result_url, "downloads")
+                    if result_local_path:
+                        for i, url in enumerate(result_local_path):
+                            if i > 0:
+                                result_url += "||"
+                            result_url += url
+
                 # 更新任务结果
                 await db_ops.update_task_result(
                     task_id=task_id,
@@ -306,7 +392,7 @@ async def midjourney_result(body: MidjourneyResultIn):
     except Exception as e:
         logger.error(f"更新任务结果失败: {e}")
     
-    return {"message": "success"}
+    return {"message": "success", "result_url": result_url}
 
 
 @router.post("/queue/release", response_model=TriggerResponse)
@@ -528,3 +614,36 @@ async def get_tasks(
         logger.error(f"查询任务列表失败: {e}")
         return {"success": False, "message": "查询失败"}
 
+
+
+@router.get("/result/{task_id}")
+async def get_task_by_id(
+    task_id: str
+):
+    """根据task_id查询任务详情"""
+    try:
+        task = await db_ops.get_task_by_task_id(task_id)
+        if task:
+            if task["task_status"] == "SUCCESS":
+                return {"code":0, "data":{
+                    "result_url": task["result_url"],
+                    "task_status": "FINISH",
+                }}
+            elif task["task_status"] == "SUBMITTED":
+                return {"code":0, "data":{
+                    "task_status": "RUNNING",
+                }}
+            else:
+                return {"code":0, "data":{
+                    "task_status": "ERROR",
+                }}
+        else:
+            return {"code":10, "data":{
+                    "task_status": "ERROR",
+                }}
+
+    except Exception as e:
+        logger.error(f"查询任务失败: {e}")
+        return {"code":102, "data":{
+                    "task_status": "ERROR",
+                }}
