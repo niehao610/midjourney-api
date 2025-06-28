@@ -403,7 +403,11 @@ async def queue_release(
     logger.info(f"清除队列任务: {body.trigger_id}")
     taskqueue.pop(body.trigger_id)
 
-    return body
+    return {
+        "trigger_id": body.trigger_id,
+        "trigger_type": "queue_release",
+        "result": "success"
+    }
 
 
 @router.post("/solo_variation", response_model=TriggerResponse)
