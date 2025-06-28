@@ -92,7 +92,7 @@ def _download_and_split_file( file_url: str,  download_dir: str) -> List[str]:
                     
                     # 保存图片
                     cropped_img.save(output_path)
-                    result_local_path.append("http://v2v.jifeng.online/downloads/" + output_filename)
+                    result_local_path.append("http://v2v.jifeng.online:8086/downloads/" + output_filename)
                 img.close()
             else:
                 logger.error(f"❌ 下载失败: HTTP {response.status_code}")
@@ -392,7 +392,7 @@ async def midjourney_result(body: MidjourneyResultIn):
     except Exception as e:
         logger.error(f"更新任务结果失败: {e}")
     
-    return {"message": "success", "result_url": result_url}
+    return {"message": "success"}
 
 
 @router.post("/queue/release", response_model=TriggerResponse)

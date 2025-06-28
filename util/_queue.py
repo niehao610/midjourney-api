@@ -55,6 +55,7 @@ class TaskQueue:
 
     def pop(self, _trigger_id: str) -> None:
         try:
+            logger.info(f"🧹 Task[{_trigger_id}] 从并发队列移除!!!!!!!!!!!!!")
             self._concur_queue.remove(_trigger_id)
             if self._wait_queue:
                 self._exec()
