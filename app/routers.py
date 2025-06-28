@@ -631,7 +631,7 @@ async def get_task_by_id(
         if task:
             if task["task_status"] == "SUCCESS":
                 return {"code":0, "data":{
-                    "result_url": task["result_url"],
+                    "file_url": task["result_url"],
                     "task_status": "FINISH",
                 }}
             elif task["task_status"] == "SUBMITTED":
