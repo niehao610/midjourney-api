@@ -593,11 +593,15 @@ async def get_task_by_id(
         if task:
             if task["task_status"] == "SUCCESS":
                 return {"status": "SUCCESS", "imageUrl": task["result_url"], "buttons": {"msg_id": task["msg_id"], "msg_hash": task["msg_hash"]}}
+            elif task["task_status"] == "TIMEOUT":
+                return {"status": "FAILURE", "message": "任务超时，已自动清理"}
+            elif task["task_status"] == "BANNED":
+                return {"status": "FAILURE", "message": "任务被封禁"}
             else:
                 tm1 = task['updated_at']
                 now = datetime.now()
                 diff = now - tm1
-                if diff.total_seconds() > 185:
+                if diff.total_seconds() > 300:  # 5分钟超时
                     return {"status": "FAILURE", "message": "任务超时"}
 
                 return {"status":task["task_status"], "message": "任务未完成"}
@@ -646,6 +650,16 @@ async def get_task_by_id(
                 return {"code":0, "data":{
                     "task_status": "RUNNING",
                 }}
+            elif task["task_status"] == "TIMEOUT":
+                return {"code":0, "data":{
+                    "task_status": "TIMEOUT",
+                    "message": "任务超时，已自动清理"
+                }}
+            elif task["task_status"] == "BANNED":
+                return {"code":0, "data":{
+                    "task_status": "BANNED",
+                    "message": "任务被封禁"
+                }}
             else:
                 return {"code":0, "data":{
                     "task_status": "ERROR",
@@ -660,3 +674,34 @@ async def get_task_by_id(
         return {"code":102, "data":{
                     "task_status": "ERROR",
                 }}
+
+
+@router.get("/queue/status")
+async def get_queue_status(
+    current_user: dict = Depends(get_current_user)
+):
+    """获取队列状态信息"""
+    try:
+        status = taskqueue.get_queue_status()
+        return {"code": 0, "data": status}
+    except Exception as e:
+        logger.error(f"获取队列状态失败: {e}")
+        return {"code": 1, "message": "获取队列状态失败"}
+
+
+@router.post("/queue/cleanup")
+async def manual_queue_cleanup(
+    current_user: dict = Depends(get_current_user)
+):
+    """手动清理队列中的超时任务"""
+    try:
+        await taskqueue._cleanup_expired_tasks()
+        status = taskqueue.get_queue_status()
+        return {
+            "code": 0, 
+            "message": "队列清理完成",
+            "data": status
+        }
+    except Exception as e:
+        logger.error(f"手动清理队列失败: {e}")
+        return {"code": 1, "message": "手动清理队列失败"}
