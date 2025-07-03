@@ -39,6 +39,7 @@ midjourney_task = Table(
     Column("task_status", String(32), nullable=False, default=""),
     Column("result_url", Text, nullable=True),
     Column("attachments", Text, nullable=True),
+    Column("prompts", Text, nullable=True),
     Column("created_at", DateTime, default=func.now()),
     Column("updated_at", DateTime, default=func.now(), onupdate=func.now()),
     # 索引
