@@ -128,7 +128,8 @@ async def imagine(
             task_type=trigger_type,
             ref_pic_url=body.picurl,
             image_index=0,
-            task_status="SUBMITTED"
+            task_status="SUBMITTED",
+            prompts=body.prompt
         )
     except Exception as e:
         logger.error(f"创建任务记录失败: {e}")
@@ -646,7 +647,7 @@ async def get_task_by_id(
                     "file_url": task["result_url"],
                     "task_status": "FINISH",
                 }}
-            elif task["task_status"] == "SUBMITTED":
+            elif task["task_status"] == "SUBMITTED" or task["task_status"] == "AUTOMA":
                 return {"code":0, "data":{
                     "task_status": "RUNNING",
                 }}

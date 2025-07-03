@@ -18,7 +18,7 @@ class MidjourneyTaskOperations:
         ref_pic_url: Optional[str] = None,
         image_index: int = 0,
         msg_id: int = 0,
-        prompt: str = "",
+        prompts: str = "",
         msg_hash: str = "",
         zoom_out: int = 0,
         direction: str = "",
@@ -38,6 +38,7 @@ class MidjourneyTaskOperations:
                 direction=direction,
                 task_type=task_type,
                 task_status=task_status,
+                prompts=prompts,
                 created_at=datetime.now(),
                 updated_at=datetime.now()
             )
